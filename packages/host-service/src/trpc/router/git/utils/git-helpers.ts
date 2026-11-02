@@ -578,11 +578,29 @@ export async function resolveDiffCategoryRefs(
 			});
 		}
 		return {
-			fromRef: opts.fromHash ?? `${opts.commitHash}^`,
+			fromRef: await resolveCommitDiffBase(git, opts.commitHash, opts.fromHash),
 			toRef: opts.commitHash,
 		};
 	}
 	return {};
+}
+
+/** The excluded base of a commit diff. `<root>^` does not resolve, so it
+ * becomes the empty tree. */
+export async function resolveCommitDiffBase(
+	git: SimpleGit,
+	commitHash: string,
+	fromHash?: string,
+): Promise<string> {
+	const base = fromHash || `${commitHash}^`;
+	if (!base.endsWith("^")) return base;
+	const hasParent = await git
+		.raw(["rev-parse", "--verify", "--quiet", `${base}^{commit}`])
+		.then((s) => s.trim() !== "")
+		.catch(() => false);
+	if (hasParent) return base;
+	// Empty-tree id for this repo's object format (sha1 or sha256).
+	return (await git.raw(["hash-object", "-t", "tree", "/dev/null"])).trim();
 }
 
 export async function loadFileDiffContent(

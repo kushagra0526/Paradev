@@ -39,10 +39,11 @@ export function useSidebarDiffRef(workspaceId: string): DiffRef {
 			case "commit":
 				return { kind: "commit", commitHash: commitHash ?? "" };
 			case "range":
+				// `fromHash` is the excluded base; the range includes its oldest commit.
 				return {
 					kind: "commit",
 					commitHash: commitHash ?? "",
-					fromHash: fromHash ?? undefined,
+					fromHash: fromHash ? `${fromHash}^` : undefined,
 				};
 			default:
 				return { kind: "against-base", baseBranch };

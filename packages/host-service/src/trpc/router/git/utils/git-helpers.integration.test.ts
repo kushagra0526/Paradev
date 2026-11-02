@@ -9,6 +9,8 @@ import {
 	getChangedFilesForDiff,
 	getDefaultBranchName,
 	resolveBaseComparison,
+	resolveCommitDiffBase,
+	resolveDiffCategoryRefs,
 } from "./git-helpers";
 
 /**
@@ -372,5 +374,56 @@ describe("getChangedFilesForDiff (integration)", () => {
 		const paths = files.map((f) => f.path).sort();
 		// Only our branch's file should show — C on main is excluded by 3-dot.
 		expect(paths).toEqual(["branch-only.ts"]);
+	});
+});
+
+// ── commit range base ─────────────────────────────────────────────
+
+describe("resolveCommitDiffBase (integration)", () => {
+	let repo: string;
+	let git: SimpleGit;
+	let a: string;
+	let b: string;
+	let c: string;
+
+	beforeEach(async () => {
+		repo = mkTmp();
+		git = await initRepo(repo);
+		await commitFile(git, repo, "a.txt", "a", "a");
+		a = (await git.revparse(["HEAD"])).trim();
+		await commitFile(git, repo, "b.txt", "b", "b");
+		b = (await git.revparse(["HEAD"])).trim();
+		await commitFile(git, repo, "c.txt", "c", "c");
+		c = (await git.revparse(["HEAD"])).trim();
+	});
+
+	afterEach(() => {
+		rmSync(repo, { recursive: true, force: true });
+	});
+
+	async function rangeFiles(fromHash: string): Promise<string[]> {
+		const from = await resolveCommitDiffBase(git, c, fromHash);
+		const files = await getChangedFilesForDiff(git, [from, c]);
+		return files.map((f) => f.path).sort();
+	}
+
+	test("a range from the root commit includes the root commit's files", async () => {
+		expect(await rangeFiles(`${a}^`)).toEqual(["a.txt", "b.txt", "c.txt"]);
+	});
+
+	test("a range includes its oldest commit", async () => {
+		expect(await rangeFiles(`${b}^`)).toEqual(["b.txt", "c.txt"]);
+	});
+
+	test("an explicit base stays excluded", async () => {
+		expect(await rangeFiles(a)).toEqual(["b.txt", "c.txt"]);
+	});
+
+	test("the root commit alone diffs against the empty tree", async () => {
+		const refs = await resolveDiffCategoryRefs(git, "commit", {
+			commitHash: a,
+		});
+		const files = await getChangedFilesForDiff(git, [refs.fromRef ?? "", a]);
+		expect(files.map((f) => f.path)).toEqual(["a.txt"]);
 	});
 });

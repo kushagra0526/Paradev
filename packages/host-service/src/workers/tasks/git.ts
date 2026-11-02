@@ -31,6 +31,7 @@ import {
 	getDefaultBranchName,
 	loadFileDiffContent,
 	mapWithConcurrency,
+	resolveCommitDiffBase,
 	resolveDiffCategoryRefs,
 } from "../../trpc/router/git/utils/git-helpers.ts";
 import type { GitStatusSnapshotComputation } from "../../trpc/router/git/utils/git-status.ts";
@@ -104,7 +105,7 @@ export const gitCommitFilesTask = defineWorkerTask<
 	type: "git/getCommitFiles",
 	handler: async ({ worktreePath, commitHash, fromHash, gitEnv }) => {
 		const git = createUserSimpleGit(worktreePath, { env: gitEnv });
-		const from = fromHash ? fromHash : `${commitHash}^`;
+		const from = await resolveCommitDiffBase(git, commitHash, fromHash);
 		return getChangedFilesForDiff(git, [from, commitHash]);
 	},
 });
